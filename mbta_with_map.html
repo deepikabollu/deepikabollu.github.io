@@ -1,0 +1,315 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.app { padding: 1rem 0; font-family: var(--font-sans); }
+.header { margin-bottom: 1.25rem; }
+.header h1 { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+.header p { font-size: 13px; color: var(--color-text-secondary); margin-top: 3px; }
+.tabs { display: flex; border-bottom: 0.5px solid var(--color-border-tertiary); margin-bottom: 1.25rem; }
+.tab { padding: 9px 18px; font-size: 14px; border-bottom: 2px solid transparent; cursor: pointer; color: var(--color-text-secondary); }
+.tab.active { color: var(--color-text-primary); border-bottom-color: #003A8C; font-weight: 500; }
+.planner { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.field label { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 5px; display: block; text-transform: uppercase; letter-spacing: 0.05em; }
+select { width: 100%; padding: 9px 12px; font-size: 14px; font-family: var(--font-sans); border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); cursor: pointer; }
+.btn-row { display: flex; gap: 8px; margin-bottom: 1.25rem; }
+button { font-family: var(--font-sans); font-size: 13px; padding: 9px 18px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); cursor: pointer; }
+button:hover { background: var(--color-background-secondary); }
+button.primary { background: #003A8C; color: #fff; border-color: #003A8C; }
+button.primary:hover { background: #002d6e; }
+#map { width: 100%; height: 380px; border-radius: var(--border-radius-lg); border: 0.5px solid var(--color-border-tertiary); margin-bottom: 1.25rem; }
+.result-card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem; margin-bottom: 1rem; }
+.route-step { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+.route-step:last-child { border-bottom: none; }
+.line-dot { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+.step-title { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
+.step-detail { font-size: 13px; color: var(--color-text-secondary); margin-top: 2px; }
+.transfer-badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--color-background-info); color: var(--color-text-info); margin-left: 6px; }
+.section-title { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 1.25rem; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--color-text-secondary); }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.arrivals-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.arrival-card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px; }
+.arrival-line { font-size: 12px; font-weight: 500; margin-bottom: 4px; }
+.arrival-time { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+.arrival-dest { font-size: 12px; color: var(--color-text-secondary); }
+.error-msg { font-size: 14px; color: var(--color-text-secondary); padding: 1rem 0; text-align: center; }
+</style>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<h2 class="sr-only">MBTA Boston Transit Planner with interactive map</h2>
+
+<div class="app">
+  <div class="header">
+    <h1>🚇 Boston T Planner</h1>
+    <p>Route finder · Live arrivals · Interactive map</p>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('route')">Route finder</div>
+    <div class="tab" onclick="showTab('arrivals')">Live arrivals</div>
+  </div>
+
+  <div id="tab-route">
+    <div class="planner">
+      <div class="field"><label>From</label>
+        <select id="from-station" onchange="clearRoute()"><option value="">Select station...</option></select>
+      </div>
+      <div class="field"><label>To</label>
+        <select id="to-station" onchange="clearRoute()"><option value="">Select station...</option></select>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="primary" onclick="findRoute()">Find route</button>
+      <button onclick="swapStations()">⇄ Swap</button>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#DA291C"></div>Red</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ED8B00"></div>Orange</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#003DA5"></div>Blue</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#00843D"></div>Green</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#7C878E"></div>Silver</div>
+    </div>
+
+    <div id="map"></div>
+    <div id="route-result"></div>
+  </div>
+
+  <div id="tab-arrivals" style="display:none;">
+    <div style="margin-bottom:12px;">
+      <div class="field"><label>Station</label>
+        <select id="arrival-station" onchange="fetchArrivals()"><option value="">Select a station...</option></select>
+      </div>
+    </div>
+    <div id="arrivals-result"><p class="error-msg">Select a station to see live arrivals</p></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const LINES = {
+  Red: { color:'#DA291C', stops:['Alewife','Davis','Porter','Harvard','Central','Kendall/MIT','Charles/MGH','Park Street','Downtown Crossing','South Station','Broadway','Andrew','JFK/UMass','Savin Hill','Fields Corner','Shawmut','Ashmont','North Quincy','Wollaston','Quincy Center','Quincy Adams','Braintree'] },
+  Orange: { color:'#ED8B00', stops:['Oak Grove','Malden Center','Wellington','Assembly','Sullivan Square','Community College','North Station','Haymarket','State','Downtown Crossing','Chinatown','Tufts Medical Center','Back Bay','Massachusetts Ave','Ruggles','Roxbury Crossing','Jackson Square','Stony Brook','Green Street','Forest Hills'] },
+  Blue: { color:'#003DA5', stops:['Wonderland','Revere Beach','Beachmont','Suffolk Downs','Orient Heights','Wood Island','Airport','Maverick','Aquarium','State','Government Center','Bowdoin'] },
+  'Green-B': { color:'#00843D', stops:['Government Center','Park Street','Boylston','Arlington','Copley','Hynes Convention Center','Kenmore','Blandford Street','Boston University East','Boston University Central','Boston University West','St. Paul Street','Pleasant Street','Babcock Street','Packards Corner','Harvard Ave','Griggs Street','Allston Street','Warren Street','Washington Street','Sutherland Road','Chiswick Road','Chestnut Hill Ave','South Street','Boston College'] },
+  'Green-C': { color:'#00843D', stops:['Government Center','Park Street','Boylston','Arlington','Copley','Hynes Convention Center','Kenmore','Saint Marys Street','Hawes Street','Kent Street','Saint Paul Street','Coolidge Corner','Summit Ave','Brandon Hall','Fairbanks Street','Washington Square','Tappan Street','Dean Road','Englewood Ave','Cleveland Circle'] },
+  'Green-D': { color:'#00843D', stops:['Union Square','Lechmere','Science Park/West End','North Station','Haymarket','Government Center','Park Street','Boylston','Arlington','Copley','Hynes Convention Center','Kenmore','Fenway','Longwood','Brookline Village','Brookline Hills','Beaconsfield','Reservoir','Chestnut Hill','Newton Centre','Newton Highlands','Eliot','Waban','Woodland','Riverside'] },
+  'Green-E': { color:'#00843D', stops:['Medford/Tufts','Ball Square','Magoun Square','Gilman Square','East Somerville','Union Square','Lechmere','Science Park/West End','North Station','Haymarket','Government Center','Park Street','Boylston','Arlington','Copley','Prudential','Symphony','Northeastern','Museum of Fine Arts','Longwood Medical Area','Brigham Circle','Fenwood Road','Mission Park','Riverway','Back of the Hill','Heath Street'] },
+  Silver: { color:'#7C878E', stops:['South Station','Courthouse','World Trade Center','Airport'] }
+};
+
+const COORDS = {
+  'Alewife':[42.3953,-71.1426],'Davis':[42.3967,-71.1226],'Porter':[42.3884,-71.1191],'Harvard':[42.3736,-71.1190],'Central':[42.3655,-71.1036],'Kendall/MIT':[42.3625,-71.0862],'Charles/MGH':[42.3612,-71.0707],'Park Street':[42.3564,-71.0624],'Downtown Crossing':[42.3553,-71.0603],'South Station':[42.3521,-71.0553],'Broadway':[42.3426,-71.0569],'Andrew':[42.3305,-71.0572],'JFK/UMass':[42.3204,-71.0524],'Savin Hill':[42.3103,-71.0535],'Fields Corner':[42.3003,-71.0609],'Shawmut':[42.2930,-71.0657],'Ashmont':[42.2843,-71.0641],'North Quincy':[42.2754,-71.0294],'Wollaston':[42.2665,-71.0202],'Quincy Center':[42.2513,-71.0052],'Quincy Adams':[42.2332,-71.0072],'Braintree':[42.2072,-71.0013],
+  'Oak Grove':[42.4368,-71.0712],'Malden Center':[42.4267,-71.0741],'Wellington':[42.4022,-71.0772],'Assembly':[42.3926,-71.0773],'Sullivan Square':[42.3838,-71.0764],'Community College':[42.3737,-71.0695],'North Station':[42.3657,-71.0623],'Haymarket':[42.3630,-71.0583],'State':[42.3590,-71.0576],'Chinatown':[42.3523,-71.0626],'Tufts Medical Center':[42.3496,-71.0642],'Back Bay':[42.3470,-71.0754],'Massachusetts Ave':[42.3412,-71.0836],'Ruggles':[42.3363,-71.0893],'Roxbury Crossing':[42.3313,-71.0950],'Jackson Square':[42.3230,-71.1006],'Stony Brook':[42.3172,-71.1047],'Green Street':[42.3103,-71.1074],'Forest Hills':[42.3007,-71.1136],
+  'Wonderland':[42.4135,-70.9918],'Revere Beach':[42.4079,-70.9925],'Beachmont':[42.3974,-70.9922],'Suffolk Downs':[42.3907,-70.9969],'Orient Heights':[42.3865,-71.0042],'Wood Island':[42.3795,-71.0229],'Airport':[42.3745,-71.0204],'Maverick':[42.3693,-71.0396],'Aquarium':[42.3596,-71.0515],'Government Center':[42.3598,-71.0590],'Bowdoin':[42.3613,-71.0635],
+  'Boylston':[42.3550,-71.0648],'Arlington':[42.3514,-71.0706],'Copley':[42.3496,-71.0773],'Hynes Convention Center':[42.3479,-71.0875],'Kenmore':[42.3488,-71.0951],
+  'Blandford Street':[42.3493,-71.1004],'Boston University East':[42.3496,-71.1047],'Boston University Central':[42.3501,-71.1099],'Boston University West':[42.3504,-71.1147],'St. Paul Street':[42.3508,-71.1185],'Pleasant Street':[42.3511,-71.1221],'Babcock Street':[42.3514,-71.1258],'Packards Corner':[42.3517,-71.1295],'Harvard Ave':[42.3504,-71.1316],'Griggs Street':[42.3491,-71.1350],'Allston Street':[42.3481,-71.1377],'Warren Street':[42.3469,-71.1407],'Washington Street':[42.3455,-71.1438],'Sutherland Road':[42.3441,-71.1468],'Chiswick Road':[42.3424,-71.1501],'Chestnut Hill Ave':[42.3410,-71.1533],'South Street':[42.3396,-71.1564],'Boston College':[42.3380,-71.1668],
+  'Saint Marys Street':[42.3457,-71.1002],'Hawes Street':[42.3425,-71.1011],'Kent Street':[42.3408,-71.1021],'Saint Paul Street':[42.3392,-71.1031],'Coolidge Corner':[42.3376,-71.1214],'Summit Ave':[42.3352,-71.1267],'Brandon Hall':[42.3338,-71.1300],'Fairbanks Street':[42.3323,-71.1333],'Washington Square':[42.3309,-71.1367],'Tappan Street':[42.3294,-71.1401],'Dean Road':[42.3280,-71.1434],'Englewood Ave':[42.3266,-71.1467],'Cleveland Circle':[42.3252,-71.1501],
+  'Fenway':[42.3446,-71.1049],'Longwood':[42.3413,-71.1098],'Brookline Village':[42.3319,-71.1213],'Brookline Hills':[42.3272,-71.1290],'Beaconsfield':[42.3226,-71.1368],'Reservoir':[42.3186,-71.1445],'Chestnut Hill':[42.3148,-71.1525],'Newton Centre':[42.3292,-71.1923],'Newton Highlands':[42.3232,-71.2055],'Eliot':[42.3192,-71.2160],'Waban':[42.3275,-71.2295],'Woodland':[42.3350,-71.2430],'Riverside':[42.3370,-71.2528],
+  'Union Square':[42.3779,-71.0989],'Lechmere':[42.3706,-71.0763],'Science Park/West End':[42.3664,-71.0680],
+  'Medford/Tufts':[42.4074,-71.1195],'Ball Square':[42.4010,-71.1145],'Magoun Square':[42.3967,-71.1090],'Gilman Square':[42.3924,-71.1037],'East Somerville':[42.3881,-71.0985],
+  'Prudential':[42.3467,-71.0822],'Symphony':[42.3425,-71.0853],'Northeastern':[42.3379,-71.0882],'Museum of Fine Arts':[42.3336,-71.0951],'Longwood Medical Area':[42.3359,-71.1015],'Brigham Circle':[42.3324,-71.1049],'Fenwood Road':[42.3282,-71.1083],'Mission Park':[42.3249,-71.1110],'Riverway':[42.3217,-71.1137],'Back of the Hill':[42.3182,-71.1163],'Heath Street':[42.3148,-71.1190],
+  'Courthouse':[42.3531,-71.0442],'World Trade Center':[42.3482,-71.0437]
+};
+
+function buildGraph() {
+  const graph = {}, stationLines = {};
+  for (const [line, data] of Object.entries(LINES)) {
+    for (let i = 0; i < data.stops.length; i++) {
+      const s = data.stops[i];
+      if (!graph[s]) graph[s] = [];
+      if (!stationLines[s]) stationLines[s] = [];
+      if (!stationLines[s].includes(line)) stationLines[s].push(line);
+      if (i > 0) {
+        const prev = data.stops[i-1];
+        if (!graph[s].find(e=>e.to===prev)) graph[s].push({to:prev,line,time:3});
+        if (!graph[prev]) graph[prev]=[];
+        if (!graph[prev].find(e=>e.to===s)) graph[prev].push({to:s,line,time:3});
+      }
+    }
+  }
+  return {graph,stationLines};
+}
+
+const {graph,stationLines} = buildGraph();
+const allStations = [...new Set(Object.values(LINES).flatMap(l=>l.stops))].sort();
+
+let map, markers={}, routeLayer=null;
+
+function initMap() {
+  map = L.map('map',{zoomControl:true}).setView([42.3601,-71.0589],12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap',maxZoom:18
+  }).addTo(map);
+
+  for (const [line, data] of Object.entries(LINES)) {
+    const coords = data.stops.map(s=>COORDS[s]).filter(Boolean);
+    L.polyline(coords,{color:data.color,weight:3,opacity:0.7}).addTo(map);
+  }
+
+  for (const [name, coord] of Object.entries(COORDS)) {
+    const lines = stationLines[name]||[];
+    const color = lines.length>1?'#fff':(LINES[lines[0]]?.color||'#888');
+    const isTransfer = lines.length>1;
+    const circle = L.circleMarker(coord,{
+      radius: isTransfer?7:5,
+      fillColor: isTransfer?'#222':color,
+      color: isTransfer?color:'#fff',
+      weight: isTransfer?2:1.5,
+      fillOpacity:1
+    }).addTo(map).bindPopup(`<b>${name}</b><br><span style="font-size:12px;color:#666;">${lines.map(l=>l+' Line').join(', ')}</span>`);
+    markers[name]=circle;
+  }
+}
+
+function highlightRoute(path) {
+  if (routeLayer) { routeLayer.forEach(l=>map.removeLayer(l)); }
+  routeLayer=[];
+  Object.values(markers).forEach(m=>{ m.setStyle({opacity:0.3,fillOpacity:0.3}); });
+  const coords = path.map(p=>COORDS[p.station]).filter(Boolean);
+  const line = L.polyline(coords,{color:'#FFD700',weight:6,opacity:0.9}).addTo(map);
+  routeLayer.push(line);
+  path.forEach(p=>{
+    if (markers[p.station]) {
+      markers[p.station].setStyle({opacity:1,fillOpacity:1,radius:8,fillColor:'#FFD700',color:'#333',weight:2});
+      routeLayer.push(markers[p.station]);
+    }
+  });
+  if (coords.length) map.fitBounds(L.latLngBounds(coords).pad(0.2));
+}
+
+function clearMapHighlight() {
+  if (routeLayer) { routeLayer.forEach(l=>{ try{map.removeLayer(l);}catch(e){} }); routeLayer=null; }
+  for (const [name,m] of Object.entries(markers)) {
+    const lines = stationLines[name]||[];
+    const color = lines.length>1?'#fff':(LINES[lines[0]]?.color||'#888');
+    const isTransfer = lines.length>1;
+    m.setStyle({radius:isTransfer?7:5,fillColor:isTransfer?'#222':color,color:isTransfer?color:'#fff',weight:isTransfer?2:1.5,fillOpacity:1,opacity:1});
+  }
+}
+
+function populateDropdowns() {
+  ['from-station','to-station','arrival-station'].forEach(id=>{
+    const sel=document.getElementById(id);
+    const ph=sel.options[0];
+    sel.innerHTML='';
+    sel.appendChild(ph);
+    allStations.forEach(s=>{
+      const o=document.createElement('option');
+      o.value=s; o.textContent=s; sel.appendChild(o);
+    });
+  });
+}
+
+function findBFS(start,end) {
+  if(start===end) return [{station:start,line:null}];
+  const visited=new Set(), queue=[[start,[{station:start,line:null}]]];
+  visited.add(start);
+  while(queue.length){
+    const [cur,path]=queue.shift();
+    for(const edge of (graph[cur]||[])){
+      if(visited.has(edge.to)) continue;
+      visited.add(edge.to);
+      const np=[...path,{station:edge.to,line:edge.line}];
+      if(edge.to===end) return np;
+      queue.push([edge.to,np]);
+    }
+  }
+  return null;
+}
+
+function buildRouteSteps(path) {
+  const steps=[];
+  let segStart=path[0].station, segLine=path[1]?.line, segStops=[segStart];
+  for(let i=1;i<path.length;i++){
+    const node=path[i];
+    if(node.line!==segLine&&i<path.length){
+      steps.push({from:segStart,to:path[i-1].station,line:segLine,stops:segStops});
+      segStart=path[i-1].station; segLine=node.line; segStops=[segStart];
+    }
+    segStops.push(node.station);
+    if(i===path.length-1) steps.push({from:segStart,to:node.station,line:segLine,stops:segStops});
+  }
+  return steps;
+}
+
+function lineColor(line){ if(!line)return'#888'; if(line.startsWith('Green'))return'#00843D'; return(LINES[line]||{}).color||'#888'; }
+function lineLabel(line){ if(!line)return''; if(line.startsWith('Green'))return'Green Line ('+line.split('-')[1]+' branch)'; return line+' Line'; }
+
+function findRoute() {
+  const from=document.getElementById('from-station').value;
+  const to=document.getElementById('to-station').value;
+  const el=document.getElementById('route-result');
+  if(!from||!to){el.innerHTML='<p class="error-msg">Please select both stations.</p>';return;}
+  if(from===to){el.innerHTML='<p class="error-msg">Start and destination are the same.</p>';return;}
+  const path=findBFS(from,to);
+  if(!path){el.innerHTML='<p class="error-msg">No route found.</p>';return;}
+  highlightRoute(path);
+  const steps=buildRouteSteps(path);
+  const totalStops=path.length-1;
+  const totalTime=totalStops*3+(steps.length-1)*5;
+  let html=`<div class="result-card"><div class="section-title" style="margin-bottom:12px;">${from} → ${to} &nbsp;·&nbsp; ~${totalTime} min &nbsp;·&nbsp; ${totalStops} stop${totalStops!==1?'s':''}${steps.length>1?`<span class="transfer-badge">${steps.length-1} transfer${steps.length>2?'s':''}</span>`:''}</div>`;
+  steps.forEach((step,i)=>{
+    const sc=step.stops.length-1;
+    html+=`<div class="route-step"><div class="line-dot" style="background:${lineColor(step.line)};"></div><div class="step-info"><div class="step-title">${i>0?'Transfer to ':'Board '}${lineLabel(step.line)}</div><div class="step-detail">${i>0?'at <strong>'+step.from+'</strong>, ':'at <strong>'+step.from+'</strong> — '}ride ${sc} stop${sc!==1?'s':''} to <strong>${step.to}</strong></div></div></div>`;
+  });
+  html+=`<div class="route-step" style="padding-top:10px;"><div style="width:13px;height:13px;border-radius:50%;background:var(--color-background-info);border:2px solid #003A8C;flex-shrink:0;margin-top:3px;"></div><div class="step-info"><div class="step-title">Arrive at ${to}</div></div></div></div>`;
+  el.innerHTML=html;
+}
+
+function clearRoute() {
+  document.getElementById('route-result').innerHTML='';
+  clearMapHighlight();
+}
+
+function swapStations() {
+  const f=document.getElementById('from-station'),t=document.getElementById('to-station');
+  const tmp=f.value; f.value=t.value; t.value=tmp; clearRoute();
+}
+
+async function fetchArrivals() {
+  const station=document.getElementById('arrival-station').value;
+  const el=document.getElementById('arrivals-result');
+  if(!station) return;
+  el.innerHTML='<p class="error-msg">Loading live arrivals...</p>';
+  try {
+    const sr=await fetch(`https://api-v3.mbta.com/stops?filter[route_type]=0,1&filter[name]=${encodeURIComponent(station)}`);
+    const sd=await sr.json();
+    if(!sd.data?.length){el.innerHTML='<p class="error-msg">Station not found.</p>';return;}
+    const stopId=sd.data[0].id;
+    const pr=await fetch(`https://api-v3.mbta.com/predictions?filter[stop]=${stopId}&include=route&sort=arrival_time&page[limit]=8`);
+    const pd=await pr.json();
+    if(!pd.data?.length){el.innerHTML='<p class="error-msg">No live predictions right now.</p>';return;}
+    const routes={};
+    (pd.included||[]).forEach(r=>{if(r.type==='route')routes[r.id]=r;});
+    const rColors={Red:'#DA291C',Orange:'#ED8B00',Blue:'#003DA5','Green-B':'#00843D','Green-C':'#00843D','Green-D':'#00843D','Green-E':'#00843D','741':'#7C878E'};
+    const now=Date.now();
+    const cards=pd.data.slice(0,6).map(p=>{
+      const t=p.attributes.arrival_time||p.attributes.departure_time;
+      const route=routes[p.relationships?.route?.data?.id]||{};
+      const rId=route.id||'';
+      const rName=route.attributes?.long_name||rId;
+      const dest=p.attributes.headsign||'Unknown';
+      const mins=t?Math.max(0,Math.round((new Date(t)-now)/60000)):null;
+      const col=rColors[rId]||'#888';
+      const ts=mins===null?'N/A':mins===0?'Now':`${mins} min`;
+      return `<div class="arrival-card"><div class="arrival-line" style="color:${col};">${rName}</div><div class="arrival-time">${ts}</div><div class="arrival-dest">toward ${dest}</div></div>`;
+    }).join('');
+    el.innerHTML=`<div class="section-title" style="margin-bottom:10px;">Live arrivals — ${station}</div><div class="arrivals-grid">${cards}</div><p style="font-size:12px;color:var(--color-text-secondary);margin-top:10px;">Powered by MBTA V3 API</p>`;
+  } catch(e) {
+    el.innerHTML='<p class="error-msg">Could not load live data.</p>';
+  }
+}
+
+function showTab(name) {
+  document.getElementById('tab-route').style.display=name==='route'?'block':'none';
+  document.getElementById('tab-arrivals').style.display=name==='arrivals'?'block':'none';
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',(i===0&&name==='route')||(i===1&&name==='arrivals')));
+  if(name==='route'&&map) setTimeout(()=>map.invalidateSize(),100);
+}
+
+populateDropdowns();
+setTimeout(initMap, 100);
+</script>
