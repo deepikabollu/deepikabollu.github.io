@@ -269,17 +269,18 @@ function swapStations() {
   const tmp=f.value; f.value=t.value; t.value=tmp; clearRoute();
 }
 
+const API_KEY = 'dfa5462332104092ac3230690842c6b3';
 async function fetchArrivals() {
   const station=document.getElementById('arrival-station').value;
   const el=document.getElementById('arrivals-result');
   if(!station) return;
   el.innerHTML='<p class="error-msg">Loading live arrivals...</p>';
   try {
-    const sr=await fetch(`https://api-v3.mbta.com/stops?filter[route_type]=0,1&filter[name]=${encodeURIComponent(station)}`);
+    const sr=await fetch(`https://api-v3.mbta.com/stops?api_key=${API_KEY}&filter[route_type]=0,1&filter[name]=${encodeURIComponent(station)}`);
     const sd=await sr.json();
     if(!sd.data?.length){el.innerHTML='<p class="error-msg">Station not found.</p>';return;}
     const stopId=sd.data[0].id;
-    const pr=await fetch(`https://api-v3.mbta.com/predictions?filter[stop]=${stopId}&include=route&sort=arrival_time&page[limit]=8`);
+    const pr=await fetch(`https://api-v3.mbta.com/predictions?api_key=${API_KEY}&filter[stop]=${stopId}&include=route&sort=arrival_time&page[limit]=8`);
     const pd=await pr.json();
     if(!pd.data?.length){el.innerHTML='<p class="error-msg">No live predictions right now.</p>';return;}
     const routes={};
