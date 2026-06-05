@@ -280,7 +280,7 @@ async function fetchArrivals() {
     const sd=await sr.json();
     if(!sd.data?.length){el.innerHTML='<p class="error-msg">Station not found.</p>';return;}
     //const stopId=sd.data[0].id;
-    const match=sd.data.dinf(s=>s.attributes.name===station);
+    const match=sd.data.find(s=>s.attributes.name===station&&s.attributes.location_type===1)||sd.data.find(s=>s.attributes.name===station);
     if(!match){el.innerHTML='<p class="error-msg">Station not found,</p>';return;}
     const stopId=match.id;
     const pr=await fetch(`https://api-v3.mbta.com/predictions?api_key=${API_KEY}&filter[stop]=${stopId}&include=route&sort=arrival_time&page[limit]=8`);
