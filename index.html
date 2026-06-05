@@ -283,11 +283,13 @@ async function fetchArrivals() {
     const match=sd.data.find(s=>s.attributes.name===station&&s.attributes.location_type===1)||sd.data.find(s=>s.attributes.name===station);
     if(!match){el.innerHTML='<p class="error-msg">Station not found,</p>';return;}
     const stopId=match.id;
-    const pr=await fetch(`https://api-v3.mbta.com/predictions?api_key=${API_KEY}&filter[stop]=${stopId}&include=route&sort=arrival_time&page[limit]=8`);
+    const pr=await fetch(`https://api-v3.mbta.com/predictions?api_key=${API_KEY}&filter[stop]=${stopId}&include=route,trip&sort=arrival_time&page[limit]=8`);
     const pd=await pr.json();
     if(!pd.data?.length){el.innerHTML='<p class="error-msg">No live predictions right now.</p>';return;}
     const routes={};
     (pd.included||[]).forEach(r=>{if(r.type==='route')routes[r.id]=r;});
+    const trips = {};
+    (pd.included||[]).forEach(r=>{if(r.type==='trip')trips[r.id]=r;});
     const rColors={Red:'#DA291C',Orange:'#ED8B00',Blue:'#003DA5','Green-B':'#00843D','Green-C':'#00843D','Green-D':'#00843D','Green-E':'#00843D','741':'#7C878E'};
     const now=Date.now();
     const cards=pd.data.slice(0,6).map(p=>{
@@ -295,7 +297,9 @@ async function fetchArrivals() {
       const route=routes[p.relationships?.route?.data?.id]||{};
       const rId=route.id||'';
       const rName=route.attributes?.long_name||rId;
-      const dest=p.attributes.headsign||p.relationships?.trip?.id||route.attributes?.long_name||'See board';
+      const tripId=p.relationships?.trip?.data?.id;
+      const dest=trips[tripId]?.attributes?.headsign||p.atributes.headsign||route.attributes?.long_name||'See board';
+      //const dest=p.attributes.headsign||p.relationships?.trip?.id||route.attributes?.long_name||'See board';
       const mins=t?Math.max(0,Math.round((new Date(t)-now)/60000)):null;
       const col=rColors[rId]||'#888';
       const ts=mins===null?'N/A':mins===0?'Now':`${mins} min`;
